@@ -65,6 +65,7 @@
 #define D_JSON_MODBUS_TYPE "Type" // allready defined
 #define D_JSON_MODBUS_VALUES "Values"
 #define D_JSON_MODBUS_LENGTH "Length"
+#define D_JSON_MODBUS_RETRY "RetryReceive"
 
 #ifndef USE_MODBUS_BRIDGE_TCP
 const char kModbusBridgeCommands[] PROGMEM = "Modbus|" // Prefix
@@ -171,6 +172,7 @@ struct ModbusBridge
   uint8_t count = 0;            // Number of values to read / write
   bool raw = false;
   uint8_t *buffer = nullptr;    // Buffer for storing read / write data
+  uint8_t retry = 0;
 };
 
 ModbusBridge modbusBridge;
@@ -249,6 +251,12 @@ void ModbusBridgeHandle(void)
   if (data_ready)
   {
     if (modbusBridge.byteCount == 0) modbusBridge.byteCount = modbusBridge.dataCount * 2;
+    if (modbusBridgeModbus->available() < modbusBridge.byteCount+5 && modbusBridge.retry > 0)
+    {
+      --modbusBridge.retry;
+      return;
+    }
+
     if (nullptr == modbusBridge.buffer) // If buffer is not initialized do not process received data
     {
       ModbusBridgeAllocError(PSTR("read"));
@@ -756,6 +764,7 @@ void CmndModbusBridgeSend(void)
   if (!root)
     return;
 
+  modbusBridge.retry = root.getUInt(PSTR(D_JSON_MODBUS_RETRY), 0);
   modbusBridge.deviceAddress = root.getUInt(PSTR(D_JSON_MODBUS_DEVICE_ADDRESS), 0);
   uint8_t functionCode = root.getUInt(PSTR(D_JSON_MODBUS_FUNCTION_CODE), 0);
   modbusBridge.startAddress = root.getULong(PSTR(D_JSON_MODBUS_START_ADDRESS), 0);
